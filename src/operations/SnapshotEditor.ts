@@ -148,15 +148,33 @@ export class SnapshotEditor {
 
     // Recurse into arrays.
     if (Array.isArray(payload) || Array.isArray(previousValue)) {
-      if (!isNil(previousValue) && !Array.isArray(previousValue)) {
-        throw new InvalidPayloadError(`Unsupported transition from a non-list to list value`, prefixPath, containerId, path, payload);
+      const previousValid = isNil(previousValue) || Array.isArray(previousValue);
+      const payloadValid = isNil(payload) || Array.isArray(payload);
+
+      if (!previousValid) {
+        const message = `Unsupported transition from a non-list to list value`;
+        const error = new InvalidPayloadError(message, prefixPath, containerId, path, payload);
+        warnings.push(error.message);
       }
-      if (!isNil(payload) && !Array.isArray(payload)) {
-        throw new InvalidPayloadError(`Unsupported transition from a list to a non-list value`, prefixPath, containerId, path, payload);
+      if (!payloadValid) {
+        const message = `Unsupported transition from a list to a non-list value`;
+        const error = new InvalidPayloadError(message, prefixPath, containerId, path, payload);
+        warnings.push(error.message);
       }
 
-      this._mergeArraySubgraph(referenceEdits, warnings, containerId, prefixPath, path, parsed, payload, previousValue);
-      return;
+      if (payloadValid) {
+        this._mergeArraySubgraph(
+          referenceEdits,
+          warnings,
+          containerId,
+          prefixPath,
+          path,
+          parsed,
+          payload as JsonArray | nil,
+          previousValid ? previousValue : null,
+        );
+        return;
+      }
     }
 
     const payloadId = this._context.entityIdForValue(payload);
@@ -169,12 +187,14 @@ export class SnapshotEditor {
       // It is invalid to transition from a *value* with an id to one without.
       if (!isNil(payload) && !payloadId) {
         const message = `Unsupported transition from an entity to a non-entity value`;
-        throw new InvalidPayloadError(message, prefixPath, containerId, path, payload);
+        const error = new InvalidPayloadError(message, prefixPath, containerId, path, payload);
+        warnings.push(error.message);
       }
       // The reverse is also invalid.
       if (!isNil(previousValue) && !previousId) {
         const message = `Unsupported transition from a non-entity value to an entity`;
-        throw new InvalidPayloadError(message, prefixPath, containerId, path, payload);
+        const error = new InvalidPayloadError(message, prefixPath, containerId, path, payload);
+        warnings.push(error.message);
       }
       // Double check that our id generator is behaving properly.
       if (payloadId && isNil(payload)) {
